@@ -27,7 +27,7 @@ func Run(datasphereClient *datasphere.Client, ORGANIZATION_ID, COMMUNITY_SUBSTR 
 	communityArr := datasphereClient.GetCommunities(ORGANIZATION_ID, COMMUNITY_SUBSTR)
 	communityArrLen := len(communityArr)
 
-	LOGBOOK := CommunityLogbook{
+	COMMUNITY_LOGBOOK := CommunityLogbook{
 		m:  make(map[string]*LogbookValue),
 		mu: sync.RWMutex{},
 	}
@@ -71,15 +71,15 @@ func Run(datasphereClient *datasphere.Client, ORGANIZATION_ID, COMMUNITY_SUBSTR 
 		}
 
 		deleteProject := common.Debounce(func(project datasphere.Project) {
-			if mValue, ok := LOGBOOK.m[project.CommunityId]; ok {
+			if mValue, ok := COMMUNITY_LOGBOOK.m[project.CommunityId]; ok {
 				common.Log(fmt.Sprintf("\tDeleting Project %s from Community %s", project.Id, project.CommunityId))
 
 				err := ret.Call(func() error {
 					return datasphereClient.DeleteProject(project.Id)
 				})
 
-				LOGBOOK.mu.Lock()
-				defer LOGBOOK.mu.Unlock()
+				COMMUNITY_LOGBOOK.mu.Lock()
+				defer COMMUNITY_LOGBOOK.mu.Unlock()
 
 				mValue.projectsCount--
 				if err == nil {
@@ -98,7 +98,7 @@ func Run(datasphereClient *datasphere.Client, ORGANIZATION_ID, COMMUNITY_SUBSTR 
 					}
 				}
 			}
-		}, time.Second)
+		}, time.Second+500*time.Millisecond)
 
 		for project := range projectsCh {
 			go deleteProject(project)
@@ -109,7 +109,7 @@ func Run(datasphereClient *datasphere.Client, ORGANIZATION_ID, COMMUNITY_SUBSTR 
 		projectArr, _ := datasphereClient.GetProjects(community.Id)
 		projectArrLen := int32(len(projectArr))
 
-		LOGBOOK.m[community.Id] = &LogbookValue{
+		COMMUNITY_LOGBOOK.m[community.Id] = &LogbookValue{
 			projectsCount:            projectArrLen,
 			deletedProjectsCount:     0,
 			errorDeletedProjectCount: 0,
@@ -131,13 +131,22 @@ func Run(datasphereClient *datasphere.Client, ORGANIZATION_ID, COMMUNITY_SUBSTR 
 	close(projectsCh)
 
 	common.Log("Cleaning Script Finished")
+	common.Log("Statistic - (total|success deleted|error deleted) Projects")
 
 	deletedCommunityCount := 0
-	for _, v := range LOGBOOK.m {
+	for _, v := range COMMUNITY_LOGBOOK.m {
+		common.Log(fmt.Sprintf(
+			"\tCommunity %s (%d|%d|%d)",
+			v.community.Id,
+			v.deletedProjectsCount+v.errorDeletedProjectCount,
+			v.deletedProjectsCount,
+			v.errorDeletedProjectCount,
+		))
+
 		if v.projectsCount == 0 && v.errorDeletedProjectCount == 0 {
 			deletedCommunityCount++
 		}
 	}
 
-	common.Log(fmt.Sprintf("Statistic: Community deleted %d/%d", communityArrLen, deletedCommunityCount))
+	common.Log(fmt.Sprintf("Community deleted %d/%d", communityArrLen, deletedCommunityCount))
 }
