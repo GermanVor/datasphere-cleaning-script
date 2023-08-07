@@ -93,12 +93,15 @@ func (c *Client) GetCommunities(organizationId, nameOrDescriptionPattern string)
 	return respBody.Communities
 }
 
-func (c *Client) GetProjects(communityId string) []Project {
+func (c *Client) GetProjects(communityId string) ([]Project, error) {
 	resp, err := c.DoRequest(
 		"GET", "/projects",
 		bytes.NewBuffer([]byte(fmt.Sprintf(`{"communityId":"%s"}`, communityId))),
 	)
-	common.Fatalln(err)
+	if err != nil {
+		return nil, err
+	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
@@ -106,26 +109,20 @@ func (c *Client) GetProjects(communityId string) []Project {
 	}
 
 	body, err := io.ReadAll(resp.Body)
-	common.Fatalln(err)
+	if err != nil {
+		return nil, err
+	}
 
 	respBody := &struct {
 		Projects []Project `json:"projects"`
 	}{}
 	err = json.Unmarshal(body, respBody)
-	common.Fatalln(err)
 
-	return respBody.Projects
+	return respBody.Projects, err
 }
 
 func (c *Client) DeleteCommunity(communityId string) error {
-	req, err := http.NewRequest(
-		"DELETE",
-		fmt.Sprintf("https://datasphere.api.cloud-preprod.yandex.net/datasphere/v2/communities/%s", communityId),
-		nil,
-	)
-	common.Fatalln(err)
-
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.DoRequest("DELETE", fmt.Sprintf("/communities/%s", communityId), nil)
 	if err != nil {
 		return err
 	}
@@ -154,15 +151,8 @@ func (c *Client) DeleteCommunity(communityId string) error {
 	return err
 }
 
-func (c *Client) DeleteProject(ctx context.Context, projectId string) error {
-	req, err := http.NewRequest(
-		"DELETE",
-		fmt.Sprintf("https://datasphere.api.cloud-preprod.yandex.net/datasphere/v2/projects/%s", projectId),
-		nil,
-	)
-	common.Fatalln(err)
-
-	resp, err := c.httpClient.Do(req)
+func (c *Client) DeleteProject(projectId string) error {
+	resp, err := c.DoRequest("DELETE", fmt.Sprintf("/projects/%s", projectId), nil)
 	if err != nil {
 		return err
 	}

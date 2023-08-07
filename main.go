@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/GermanVor/datasphere-cleaning-script/cleaningScript"
 	"github.com/GermanVor/datasphere-cleaning-script/common"
 	"github.com/GermanVor/datasphere-cleaning-script/service/datasphere"
 	"github.com/joho/godotenv"
@@ -77,14 +78,5 @@ func main() {
 	defer cancel()
 
 	datasphereClient := datasphere.InitClient(ctx, AUTHORIZATION_TOKEN)
-	communityArr := datasphereClient.GetCommunities(ORGANIZATION_ID, COMMUNITY_SUBSTR)
-
-	for _, community := range communityArr {
-		fmt.Println(community.Name)
-
-		projectArr := datasphereClient.GetProjects(community.Id)
-		for _, project := range projectArr {
-			fmt.Println("\t", project.Name)
-		}
-	}
+	cleaningScript.Run(datasphereClient, ORGANIZATION_ID, COMMUNITY_SUBSTR)
 }
